@@ -116,7 +116,7 @@ class channel
         // steady state ops
         uint64_t remote();
         void deanonymize_remote(uint64_t remote);
-        void enqueue(std::auto_ptr<e::buffer> msg);
+        void enqueue(std::unique_ptr<e::buffer> msg);
         busybee_returncode address(po6::net::location* addr);
         // may return TIME_TO_CLOSE
         busybee_returncode do_work_send();
@@ -164,7 +164,7 @@ class channel
         // used only by thread permitted into work_recv
         unsigned m_recv_partial_header_sz;
         uint8_t m_recv_partial_header[BUSYBEE_HEADER_SIZE];
-        std::auto_ptr<e::buffer> m_recv_msg;
+        std::unique_ptr<e::buffer> m_recv_msg;
         uint32_t m_recv_head;
 
     private:
@@ -183,12 +183,12 @@ class server : public busybee_server
 
     public:
         busybee_returncode init();
-        virtual bool deliver(uint64_t server_id, std::auto_ptr<e::buffer> msg);
+        virtual bool deliver(uint64_t server_id, std::unique_ptr<e::buffer> msg);
         virtual busybee_returncode send(uint64_t server_id,
-                                        std::auto_ptr<e::buffer> msg);
+                                        std::unique_ptr<e::buffer> msg);
         virtual busybee_returncode recv(e::garbage_collector::thread_state* ts,
                                         int timeout, uint64_t* server_id,
-                                        std::auto_ptr<e::buffer>* msg);
+                                        std::unique_ptr<e::buffer>* msg);
         virtual busybee_returncode recv_no_msg(e::garbage_collector::thread_state* ts,
                                                int timeout, uint64_t* server_id);
         virtual busybee_returncode get_addr(uint64_t server_id, po6::net::location* addr);
@@ -231,17 +231,17 @@ class client : public busybee_client
 
     public:
         busybee_returncode init();
-        virtual bool deliver(uint64_t client_id, std::auto_ptr<e::buffer> msg);
+        virtual bool deliver(uint64_t client_id, std::unique_ptr<e::buffer> msg);
         virtual busybee_returncode send(uint64_t server_id,
-                                        std::auto_ptr<e::buffer> msg);
+                                        std::unique_ptr<e::buffer> msg);
         virtual busybee_returncode recv(int timeout, uint64_t* server_id,
-                                        std::auto_ptr<e::buffer>* msg);
+                                        std::unique_ptr<e::buffer>* msg);
         virtual busybee_returncode recv_no_msg(int timeout, uint64_t* server_id);
         virtual int poll_fd() { return m_poll->poll_fd(); }
         virtual busybee_returncode set_external_fd(int fd);
         virtual busybee_returncode reset();
         virtual busybee_returncode send_anonymous(const po6::net::location& loc,
-                                                  std::auto_ptr<e::buffer> msg);
+                                                  std::unique_ptr<e::buffer> msg);
 
     private:
         channel* get_channel(uint64_t server_id, busybee_returncode* rc);
@@ -272,8 +272,8 @@ class single : public busybee_single
 
     public:
         virtual int poll_fd();
-        virtual busybee_returncode send(std::auto_ptr<e::buffer> msg);
-        virtual busybee_returncode recv(int timeout, std::auto_ptr<e::buffer>* msg);
+        virtual busybee_returncode send(std::unique_ptr<e::buffer> msg);
+        virtual busybee_returncode recv(int timeout, std::unique_ptr<e::buffer>* msg);
 
     private:
         busybee_returncode setup();
@@ -282,7 +282,7 @@ class single : public busybee_single
         po6::net::hostname m_host;
         po6::net::location m_addr;
         enum { HOSTNAME, LOCATION } m_method;
-        std::auto_ptr<channel> m_chan;
+        std::unique_ptr<channel> m_chan;
         message* m_recv_queue;
         message** m_recv_end;
 
@@ -474,10 +474,10 @@ channel :: enqueue_identify()
     if (BUSYBEE_IS_ANONYMOUS(remote)) remote = 0;
     DEBUG("channel " << (void*)this << " identifying local=" << local << " remote=" << remote);
     const size_t sz = BUSYBEE_HEADER_SIZE + 2 * sizeof(uint64_t);
-    std::auto_ptr<e::buffer> msg(e::buffer::create(sz));
+    std::unique_ptr<e::buffer> msg(e::buffer::create(sz));
     msg->pack_at(BUSYBEE_HEADER_SIZE) << local << remote;
     msg->pack() << uint32_t(msg->size() | HEADER_IDENTIFY);
-    std::auto_ptr<message> m(new message(msg.get(), 0));
+    std::unique_ptr<message> m(new message(msg.get(), 0));
     msg.release();
     m_send_mtx.lock();
     queue_push(&m_send_end, m.get());
@@ -508,7 +508,7 @@ channel :: deanonymize_remote(uint64_t remote)
 }
 
 void
-channel :: enqueue(std::auto_ptr<e::buffer> msg)
+channel :: enqueue(std::unique_ptr<e::buffer> msg)
 {
     assert(msg->size() >= BUSYBEE_HEADER_SIZE);
     assert(msg->size() <= BUSYBEE_MAX_MSG_SIZE);
@@ -520,10 +520,10 @@ channel :: enqueue(std::auto_ptr<e::buffer> msg)
     {
         DEBUG("channel " << (void*)this << " enqueuing " << msg->size() << "B extended message");
         const size_t emsg_sz = BUSYBEE_HEADER_SIZE + sizeof(uint64_t);
-        std::auto_ptr<e::buffer> emsg(e::buffer::create(emsg_sz));
+        std::unique_ptr<e::buffer> emsg(e::buffer::create(emsg_sz));
         e::pack32be(emsg_sz | HEADER_EXTENDED, emsg->data());
         e::pack64be(msg->size(), emsg->data() + BUSYBEE_HEADER_SIZE);
-        std::auto_ptr<message> m(new message(emsg.get(), 0));
+        std::unique_ptr<message> m(new message(emsg.get(), 0));
         emsg.release();
         queue_push(&msg_end, m.get());
         m.release();
@@ -536,7 +536,7 @@ channel :: enqueue(std::auto_ptr<e::buffer> msg)
         e::pack32be(msg->size(), msg->data());
     }
 
-    std::auto_ptr<message> m(new message(msg.get(), 0));
+    std::unique_ptr<message> m(new message(msg.get(), 0));
     msg.release();
     queue_push(&msg_end, m.get());
     m.release();
@@ -1241,7 +1241,7 @@ server :: init()
 }
 
 bool
-server :: deliver(uint64_t server_id, std::auto_ptr<e::buffer> msg)
+server :: deliver(uint64_t server_id, std::unique_ptr<e::buffer> msg)
 {
     message* m = new message(msg.get(), server_id);
     msg.release();
@@ -1253,7 +1253,7 @@ server :: deliver(uint64_t server_id, std::auto_ptr<e::buffer> msg)
 }
 
 busybee_returncode
-server :: send(uint64_t server_id, std::auto_ptr<e::buffer> msg)
+server :: send(uint64_t server_id, std::unique_ptr<e::buffer> msg)
 {
     assert(msg->size() >= BUSYBEE_HEADER_SIZE);
     assert(msg->size() <= BUSYBEE_MAX_MSG_SIZE);
@@ -1265,14 +1265,14 @@ server :: send(uint64_t server_id, std::auto_ptr<e::buffer> msg)
         return rc;
     }
 
-    chan->enqueue(msg);
+    chan->enqueue(std::move(msg));
     return work_send(chan);
 }
 
 busybee_returncode
 server :: recv(e::garbage_collector::thread_state* ts,
                int timeout, uint64_t* id,
-               std::auto_ptr<e::buffer>* msg)
+               std::unique_ptr<e::buffer>* msg)
 {
     *id = 0;
     bool looped = false;
@@ -1641,7 +1641,7 @@ client :: init()
 }
 
 bool
-client :: deliver(uint64_t server_id, std::auto_ptr<e::buffer> msg)
+client :: deliver(uint64_t server_id, std::unique_ptr<e::buffer> msg)
 {
     message* m = new message(msg.get(), server_id);
     msg.release();
@@ -1650,7 +1650,7 @@ client :: deliver(uint64_t server_id, std::auto_ptr<e::buffer> msg)
 }
 
 busybee_returncode
-client :: send(uint64_t server_id, std::auto_ptr<e::buffer> msg)
+client :: send(uint64_t server_id, std::unique_ptr<e::buffer> msg)
 {
     assert(msg->size() >= BUSYBEE_HEADER_SIZE);
     assert(msg->size() <= BUSYBEE_MAX_MSG_SIZE);
@@ -1662,13 +1662,13 @@ client :: send(uint64_t server_id, std::auto_ptr<e::buffer> msg)
         return rc;
     }
 
-    chan->enqueue(msg);
+    chan->enqueue(std::move(msg));
     return work_send(chan);
 }
 
 busybee_returncode
 client :: recv(int timeout, uint64_t* id,
-               std::auto_ptr<e::buffer>* msg)
+               std::unique_ptr<e::buffer>* msg)
 {
     *id = 0;
 
@@ -1762,12 +1762,12 @@ client :: reset()
 
 busybee_returncode
 client :: send_anonymous(const po6::net::location& remote,
-                         std::auto_ptr<e::buffer> msg)
+                         std::unique_ptr<e::buffer> msg)
 {
     assert(msg->size() >= BUSYBEE_HEADER_SIZE);
     assert(msg->size() <= BUSYBEE_MAX_MSG_SIZE);
     busybee_returncode rc;
-    std::auto_ptr<channel> chan(new channel());
+    std::unique_ptr<channel> chan(new channel());
     rc = chan->connect(0, 0, remote);
 
     if (rc != BUSYBEE_SUCCESS)
@@ -1785,7 +1785,7 @@ client :: send_anonymous(const po6::net::location& remote,
     channel* c = chan.release();
     assert(m_channels[c->fd()] == NULL || m_channels[c->fd()] == CHANNEL_EXTERNAL);
     m_channels[c->fd()] = c;
-    c->enqueue(msg);
+    c->enqueue(std::move(msg));
     return work_send(c);
 }
 
@@ -1809,7 +1809,7 @@ client :: get_channel(uint64_t server_id, busybee_returncode* rc)
         return NULL;
     }
 
-    std::auto_ptr<channel> chan(new channel());
+    std::unique_ptr<channel> chan(new channel());
     *rc = chan->connect(0, server_id, remote);
 
     if (*rc != BUSYBEE_SUCCESS)
@@ -1990,7 +1990,7 @@ single :: poll_fd()
 }
 
 busybee_returncode
-single :: send(std::auto_ptr<e::buffer> msg)
+single :: send(std::unique_ptr<e::buffer> msg)
 {
     if (!m_chan.get())
     {
@@ -2002,7 +2002,7 @@ single :: send(std::auto_ptr<e::buffer> msg)
         }
     }
 
-    m_chan->enqueue(msg);
+    m_chan->enqueue(std::move(msg));
     busybee_returncode rc = m_chan->do_work_send();
 
     if (rc == INTERNAL_TIME_TO_CLOSE)
@@ -2015,7 +2015,7 @@ single :: send(std::auto_ptr<e::buffer> msg)
 }
 
 busybee_returncode
-single :: recv(int timeout, std::auto_ptr<e::buffer>* msg)
+single :: recv(int timeout, std::unique_ptr<e::buffer>* msg)
 {
     while (true)
     {
