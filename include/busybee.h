@@ -87,11 +87,11 @@ class busybee_server
     public:
         // Enqueue a message in the "recv" queue.  The server_id and msg passed
         // in here will be returned via the server_id and msg arguments to recv.
-        virtual bool deliver(uint64_t server_id, std::auto_ptr<e::buffer> msg) = 0;
+        virtual bool deliver(uint64_t server_id, std::unique_ptr<e::buffer> msg) = 0;
         // Send a message.  A BUSYBEE_SUCCESS returncode guarantees at most that
         // the message is enqueued in userspace.
         virtual busybee_returncode send(uint64_t server_id,
-                                        std::auto_ptr<e::buffer> msg) = 0;
+                                        std::unique_ptr<e::buffer> msg) = 0;
         // Receive a message or notification of another event.  server_id is
         // filled in on BUSYBEE_SUCCESS or BUSYBEE_DISRUPTED.  msg is filled in
         // on BUSYBEE_SUCCESS.  Otherwise, id/msg left unchanged.
@@ -99,7 +99,7 @@ class busybee_server
         // The thread state may be taken offline
         virtual busybee_returncode recv(e::garbage_collector::thread_state* ts,
                                         int timeout, uint64_t* server_id,
-                                        std::auto_ptr<e::buffer>* msg) = 0;
+                                        std::unique_ptr<e::buffer>* msg) = 0;
         // Receive a notification of a non-message event.  This will never
         // return a message, and thus never return BUSYBEE_SUCCESS.  The primary
         // use for this function is to receive notification of transport layer
@@ -128,16 +128,16 @@ class busybee_client
     public:
         // Enqueue a message in the "recv" queue.  The server_id and msg passed
         // in here will be returned via the server_id and msg arguments to recv.
-        virtual bool deliver(uint64_t server_id, std::auto_ptr<e::buffer> msg) = 0;
+        virtual bool deliver(uint64_t server_id, std::unique_ptr<e::buffer> msg) = 0;
         // Send a message.  A BUSYBEE_SUCCESS returncode guarantees at most that
         // the message is enqueued in userspace.
         virtual busybee_returncode send(uint64_t server_id,
-                                        std::auto_ptr<e::buffer> msg) = 0;
+                                        std::unique_ptr<e::buffer> msg) = 0;
         // Receive a message or notification of another event.  server_id is
         // filled in on BUSYBEE_SUCCESS or BUSYBEE_DISRUPTED.  msg is filled in
         // on BUSYBEE_SUCCESS.  Otherwise, id/msg left unchanged.
         virtual busybee_returncode recv(int timeout, uint64_t* server_id,
-                                        std::auto_ptr<e::buffer>* msg) = 0;
+                                        std::unique_ptr<e::buffer>* msg) = 0;
         // Receive a notification of a non-message event.  This will never
         // return a message, and thus never return BUSYBEE_SUCCESS.  The primary
         // use for this function is to receive notification of transport layer
@@ -158,7 +158,7 @@ class busybee_client
         // connection will be anonymous, and the server_id reported by the
         // remote server will be assumed accurate.
         virtual busybee_returncode send_anonymous(const po6::net::location& loc,
-                                                  std::auto_ptr<e::buffer> msg) = 0;
+                                                  std::unique_ptr<e::buffer> msg) = 0;
 };
 
 class busybee_single
@@ -176,10 +176,10 @@ class busybee_single
         virtual int poll_fd() = 0;
         // Send a message.  A BUSYBEE_SUCCESS returncode guarantees at most that
         // the message is enqueued in userspace.
-        virtual busybee_returncode send(std::auto_ptr<e::buffer> msg) = 0;
+        virtual busybee_returncode send(std::unique_ptr<e::buffer> msg) = 0;
         // Receive a message or notification of another event.  msg is filled in
         // on BUSYBEE_SUCCESS.  Otherwise, msg left unchanged.
-        virtual busybee_returncode recv(int timeout, std::auto_ptr<e::buffer>* msg) = 0;
+        virtual busybee_returncode recv(int timeout, std::unique_ptr<e::buffer>* msg) = 0;
 };
 
 bool busybee_discover(po6::net::ipaddr* ip);
