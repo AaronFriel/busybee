@@ -3,11 +3,14 @@ ifeq ($(shell [ $(THREADS) -gt 8 ] && echo yes),yes)
 THREADS := 8
 endif
 
-.PHONY: all clones po6_clone e_clone po6 e busybee
+.PHONY: all clones lint po6_clone e_clone po6 e busybee
 
 all: busybee
 
 clones: po6_clone e_clone
+
+lint:
+	./check.sh
 
 po6_clone:
 	@if [ -d po6/.git ]; then echo "Using existing clone in po6"; else git clone https://github.com/AaronFriel/po6.git po6; fi
